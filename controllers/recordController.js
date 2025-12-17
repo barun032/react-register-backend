@@ -87,7 +87,7 @@ const updateRecord = async (req, res) => {
         if (updateData.dispatchMemoNo && String(updateData.dispatchMemoNo).trim() !== '') {
             updateData.status = 'Completed';
         }
-
+        
         const record = await Record.findByIdAndUpdate(req.params.id, updateData, { new: true });
         res.status(200).json(record);
     } catch (error) {
