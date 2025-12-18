@@ -10,6 +10,8 @@ const recordSchema = mongoose.Schema({
     subject: { type: String },
     status: { type: String, default: 'Pending' },
     remarks: { type: String },
+    reminderDate: {type: Date},
+    reminderNumber: {type: String},
 
     // Receive Specific
     from: { type: String },
