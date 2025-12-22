@@ -21,58 +21,47 @@ const getRecords = async (req, res) => {
 // @route   POST /api/records
 const createRecord = async (req, res) => {
     try {
-        // 1. Destructure fields from the request
-        const { registerType, part, receiveRefPart, receiveRefNo, date } = req.body;
+        const { registerType, part, receiveRefPart, receiveRefNo, date, dispatchMemoNo, dispatchDate } = req.body;
 
-        // 2. Auto-Generate Consecutive Number for the NEW record
-        const lastRecord = await Record.findOne({ registerType, part })
-                                       .sort({ consecutiveNo: -1 });
-
+        // Auto-generate consecutive number
+        const lastRecord = await Record.findOne({ registerType, part }).sort({ consecutiveNo: -1 });
         const nextNo = lastRecord ? lastRecord.consecutiveNo + 1 : 1;
 
-        // 3. Create the New Record (Dispatch or Receive)
+        // Determine status: Auto-complete if Receive Register has manual dispatch details
+        let newStatus = req.body.status || 'Pending';
+        if (registerType === 'Receive Register' && dispatchMemoNo && dispatchDate) {
+            newStatus = 'Completed';
+        }
+
         const record = await Record.create({
             ...req.body,
-            consecutiveNo: nextNo
+            consecutiveNo: nextNo,
+            status: newStatus
         });
 
-        // --- 4. AUTOMATIC LINKING LOGIC ---
-        // Logic: If we just created a 'Dispatch Register' entry AND it references a 'Receive Register'
+        // Link Dispatch entry to original Receive record if applicable
         if (registerType === 'Dispatch Register' && receiveRefPart && receiveRefNo) {
-            
-            console.log(`[LINKING] Dispatch #${nextNo} is replying to ${receiveRefPart} #${receiveRefNo}`);
-
-            // IMPORTANT: Ensure receiveRefNo is treated as a Number for the search query
             const targetRefNo = parseInt(receiveRefNo, 10);
 
-            // Find the original Receive Record and update its "Dispatch Register" columns AND Status
-            const updatedReceiveRecord = await Record.findOneAndUpdate(
+            await Record.findOneAndUpdate(
                 {
-                    registerType: 'Receive Register', // Target is a Receive Record
-                    part: receiveRefPart,             // In the specific Part (e.g., "Part I")
-                    consecutiveNo: targetRefNo        // Matching the Ref No provided
+                    registerType: 'Receive Register',
+                    part: receiveRefPart,
+                    consecutiveNo: targetRefNo
                 },
                 {
                     $set: {
-                        // FILL THE "DISPATCH REGISTER" GROUP COLUMNS:
-                        dispatchMemoNo: nextNo.toString(), // Fill 'Memo No.' with Dispatch ID
-                        dispatchDate: date,                // Fill 'Dispatch Date' with Dispatch Date
-                        status: 'Completed'                // <--- CRITICAL: Explicitly set status to Completed
+                        dispatchMemoNo: nextNo.toString(),
+                        dispatchDate: date,
+                        status: 'Completed'
                     }
                 },
                 { new: true }
             );
-
-            if (updatedReceiveRecord) {
-                console.log("SUCCESS: Receive Record linked and marked as 'Completed'.");
-            } else {
-                console.log("FAILED: Could not find the Receive Record to link.");
-            }
         }
 
         res.status(201).json(record);
     } catch (error) {
-        console.error("Create Record Error:", error);
         res.status(400).json({ message: error.message });
     }
 };
@@ -83,8 +72,11 @@ const updateRecord = async (req, res) => {
     try {
         let updateData = { ...req.body };
 
-        // SAFETY CHECK: If user manually enters a Dispatch Memo No, ensure status becomes Completed
-        if (updateData.dispatchMemoNo && String(updateData.dispatchMemoNo).trim() !== '') {
+        // Auto-complete if dispatch details are added/updated
+        if (
+            (updateData.dispatchMemoNo && String(updateData.dispatchMemoNo).trim() !== '') &&
+            (updateData.dispatchDate && String(updateData.dispatchDate).trim() !== '')
+        ) {
             updateData.status = 'Completed';
         }
         
