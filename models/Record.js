@@ -22,6 +22,7 @@ const recordSchema = mongoose.Schema({
     collectionNumber: { type: String },
     fileInCollection: { type: String },
     actionType: { type: String },
+    fileNameOrNo: {type: String},
     endorsedTo: { type: String },
     
     // Dispatch Specific
